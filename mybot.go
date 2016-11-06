@@ -36,7 +36,7 @@ import (
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "usage: mybot slack-bot-token\n")
+		fmt.Fprintf(os.Stderr, "DEV usage: mybot slack-bot-token\n")
 		os.Exit(1)
 	}
 
@@ -62,6 +62,11 @@ func main() {
 					postMessage(ws, m)
 				}(m)
 				// NOTE: the Message object is copied, this is intentional
+			} else if len(parts) == 4 && parts[1] == "rate" {
+				go func(m Message) {
+					m.Text = getCurrencyRate(parts[2], parts[3])
+					postMessage(ws, m)
+				}(m)
 			} else {
 				// huh?
 				m.Text = fmt.Sprintf("sorry, that does not compute\n")
@@ -88,4 +93,29 @@ func getQuote(sym string) string {
 		return fmt.Sprintf("%s (%s) is trading at $%s", rows[0][0], rows[0][1], rows[0][2])
 	}
 	return fmt.Sprintf("unknown response format (symbol was \"%s\")", sym)
+}
+
+// http://download.finance.yahoo.com/d/quotes.csv?s=GBPEUR=X&f=l1
+func getCurrencyRate(from string, to string) string {
+	from = strings.ToUpper(from)
+	to = strings.ToUpper(to)
+	url := fmt.Sprintf("http://download.finance.yahoo.com/d/quotes.csv?s=%s%s=X&f=l1", from, to)
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+
+	rows, err := csv.NewReader(resp.Body).ReadAll()
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+
+	fmt.Println()
+	fmt.Printf("Received %s", rows[0])
+
+	if len(rows) >= 1 && len(rows[0]) == 1 {
+		return fmt.Sprintf("Currency rate for %s/%s is: %s", from, to, rows[0][0])
+	}
+
+	return fmt.Sprintf("unknown response format (input was from=%s, to=%s)", from, to)
 }
